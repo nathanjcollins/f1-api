@@ -1,25 +1,29 @@
-use actix_web::{error, get, web, HttpResponse, Responder};
-use diesel::RunQueryDsl;
+use actix_web::{error::ErrorInternalServerError, get, web, HttpResponse, Responder};
+use serde::Serialize;
+use sqlx::MySqlPool;
 
-use crate::{models::Circuit, DbPool};
-
-type DbError = Box<dyn std::error::Error + Send + Sync>;
+#[derive(Serialize)]
+struct Circuit {
+    circuit_id: i32,
+    name: String,
+    country: Option<String>,
+    location: Option<String>,
+    lat: Option<f32>,
+    lng: Option<f32>,
+    alt: Option<i32>,
+}
 
 #[get("/circuits")]
-pub async fn get_circuits(pool: web::Data<DbPool>) -> actix_web::Result<impl Responder> {
-    use crate::schema::circuits::dsl::*;
+pub async fn get_circuits(pool: web::Data<MySqlPool>) -> actix_web::Result<impl Responder> {
+    let pool = pool.get_ref();
 
-    let result = web::block(move || {
-        let mut conn = pool.get()?;
+    let rows = sqlx::query_as!(
+        Circuit,
+        "SELECT circuitId as circuit_id, name, location, country, lat, lng, alt  FROM circuits"
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(ErrorInternalServerError)?;
 
-        let data = circuits.load::<Circuit>(&mut conn)?;
-
-        let blah: Result<Vec<Circuit>, DbError> = Ok(data);
-
-        blah
-    })
-    .await?
-    .map_err(error::ErrorInternalServerError)?;
-
-    Ok(HttpResponse::Ok().json(result))
+    Ok(HttpResponse::Ok().json(rows))
 }

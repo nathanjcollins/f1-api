@@ -14,4 +14,9 @@ openssl = { version = "0.10", features = ["vendored"] }
 anyhow = "1.0"
 dotenv = "0.15.0"
 chrono = { version = "0.4", features = ["serde"] }
-diesel = { version = "2.0.2", features = ["mysql", "r2d2"] }
+sqlx = { version = "0.6", features = [
+  "runtime-actix-native-tls",
+  "mysql",
+  "chrono",
+] }
+itertools = "0.10"

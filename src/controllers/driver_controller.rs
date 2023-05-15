@@ -1,25 +1,36 @@
-use actix_web::{error, get, web, HttpResponse, Responder};
-use diesel::RunQueryDsl;
+use actix_web::{error::ErrorInternalServerError, get, web, HttpResponse, Responder};
+use chrono::NaiveDate;
+use serde::Serialize;
+use sqlx::MySqlPool;
 
-use crate::{models::Driver, DbPool};
-
-type DbError = Box<dyn std::error::Error + Send + Sync>;
+#[derive(Serialize)]
+struct Driver {
+    driver_id: i32,
+    number: Option<i32>,
+    nationality: Option<String>,
+    code: Option<String>,
+    forename: String,
+    surname: String,
+    dob: Option<NaiveDate>,
+}
 
 #[get("/drivers")]
-pub async fn get_drivers(pool: web::Data<DbPool>) -> actix_web::Result<impl Responder> {
-    use crate::schema::drivers::dsl::*;
+pub async fn get_drivers(pool: web::Data<MySqlPool>) -> actix_web::Result<impl Responder> {
+    let pool = pool.get_ref();
 
-    let result = web::block(move || {
-        let mut conn = pool.get()?;
+    let rows = sqlx::query_as!(
+        Driver,
+        "
+SELECT d.driverId as driver_id, number, code, forename, surname, dob, nationality
+FROM drivers d
+JOIN (
+	SELECT driverId from driverStandings WHERE raceId = (SELECT MAX(raceId) from driverStandings)
+) ds ON d.driverId = ds.driverId;
+"
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(ErrorInternalServerError)?;
 
-        let data = drivers.load::<Driver>(&mut conn)?;
-
-        let blah: Result<Vec<Driver>, DbError> = Ok(data);
-
-        blah
-    })
-    .await?
-    .map_err(error::ErrorInternalServerError)?;
-
-    Ok(HttpResponse::Ok().json(result))
+    Ok(HttpResponse::Ok().json(rows))
 }
